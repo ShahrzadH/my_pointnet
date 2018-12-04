@@ -15,6 +15,8 @@ def get_model(point_cloud, is_training, bn_decay=None):
     num_point = point_cloud.get_shape()[1].value
     num_feature = point_cloud.get_shape()[2].value
     end_points = {}
+    
+    is_training = tf.placeholder_with_default(is_training, shape=())
 
     with tf.variable_scope('transform_net1') as sc:
         transform = input_transform_net(point_cloud, is_training, bn_decay)
@@ -72,9 +74,9 @@ def get_loss(pred, label, end_points, reg_weight=0.001):
     pred: B,
     label: B, 
     """
-    loss = tf.nn.logistic_cross_entropy_with_logits(logits=pred, labels=label)
+    loss = tf.nn.sigmoid_cross_entropy_with_logits(logits=pred, labels=label)
     classify_loss = tf.reduce_mean(loss)
-    tf.summary.scalar('classify loss', classify_loss)
+    tf.summary.scalar('classify_loss', classify_loss)
 
     # Enforce the transformation as orthogonal matrix
     transform = end_points['transform'] # BxKxK
@@ -82,7 +84,7 @@ def get_loss(pred, label, end_points, reg_weight=0.001):
     mat_diff = tf.matmul(transform, tf.transpose(transform, perm=[0,2,1]))
     mat_diff -= tf.constant(np.eye(K), dtype=tf.float32)
     mat_diff_loss = tf.nn.l2_loss(mat_diff) 
-    tf.summary.scalar('mat loss', mat_diff_loss)
+    tf.summary.scalar('mat_loss', mat_diff_loss)
 
     return classify_loss + mat_diff_loss * reg_weight
 
@@ -98,7 +100,7 @@ def build_input(x, y, batch_size, mode):
                                               shapes=[[num_point, num_channel], [1]])
         num_threads = 8
         
-        dataset = tf.data.Dataset.from_tensor_slices((x, y)).repeat(150)
+        dataset = tf.data.Dataset.from_tensor_slices((x, y)).repeat(50)
     else:
         example_queue = tf.FIFOQueue(3 * batch_size, \
                                      dtypes=[tf.float32, tf.float32], \
@@ -117,7 +119,7 @@ def build_input(x, y, batch_size, mode):
 
     assert len(points.get_shape()) == 3
     assert points.get_shape()[0] == batch_size
-    assert points.get_shape()[-1] == 3
+    assert points.get_shape()[-1] == num_channel
     assert len(labels.get_shape()) == 2
     assert labels.get_shape()[0] == batch_size
     assert labels.get_shape()[-1] == 1
