@@ -10,13 +10,13 @@ def get_model(point_cloud, is_training, bn_decay=None):
     """ Regression PointNet, input is BxNxF, output Bx1 """
     batch_size = point_cloud.get_shape()[0].value
     num_point = point_cloud.get_shape()[1].value
-    num_feature = point_cloud.get_shape()[2].value
+    num_channel = point_cloud.get_shape()[2].value
     input_image = tf.expand_dims(point_cloud, -1)
     
     is_training = tf.placeholder_with_default(is_training, shape=())
     
     # Point functions (MLP implemented as conv2d)
-    net = conv2d(input_image, 64, [1,num_feature],
+    net = conv2d(input_image, 64, [1,num_channel],
                  padding='VALID', stride=[1,1],
                  bn=True, is_training=is_training,
                  scope='conv1', bn_decay=bn_decay)
@@ -93,7 +93,7 @@ def build_input(x, y, batch_size, mode):
 
     assert len(points.get_shape()) == 3
     assert points.get_shape()[0] == batch_size
-    assert points.get_shape()[-1] == 3
+    assert points.get_shape()[-1] == num_channel
     assert len(labels.get_shape()) == 2
     assert labels.get_shape()[0] == batch_size
     assert labels.get_shape()[-1] == 1
