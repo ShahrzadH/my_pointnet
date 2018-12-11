@@ -8,7 +8,7 @@ from utils import *
 import tensorflow as tf
 
 def get_model(point_cloud, is_training, bn_decay=None):
-    """ Regression PointNet, input is BxNx3, output Bx1 """
+    """ Regression PointNet, input is BxNxK, output Bx1 """
     batch_size = point_cloud.get_shape()[0].value
     num_point = point_cloud.get_shape()[1].value
     num_channel = point_cloud.get_shape()[2].value
