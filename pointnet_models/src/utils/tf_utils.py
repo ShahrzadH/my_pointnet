@@ -6,21 +6,21 @@ Created on Dec 4, 2018
 
 import tensorflow as tf
 
-def _variable_on_cpu(name, shape, initializer, use_fp16=False):
+def _variable_on_cpu(name, shape, initializer, dtype=tf.float32):
     """Helper to create a Variable stored on CPU memory.
     Args:
         name: name of the variable
         shape: list of ints
-        initializer: initializer for Variable
+        initializer: initializer for variable
+        dtype: data type of variable
     Returns:
-        Variable Tensor
+        variable Tensor
     """
     with tf.device('/cpu:0'):
-        dtype = tf.float32
         var = tf.get_variable(name, shape, initializer=initializer, dtype=dtype)
     return var
 
-def _variable_with_weight_decay(name, shape, stddev, wd, use_xavier=True):
+def _variable_with_weight_decay(name, shape, wd, dtype=tf.float32, use_xavier=True, stddev=1e-3):
     """Helper to create an initialized Variable with weight decay.
 
     Note that the Variable is initialized with a truncated normal distribution.
@@ -29,19 +29,20 @@ def _variable_with_weight_decay(name, shape, stddev, wd, use_xavier=True):
     Args:
         name: name of the variable
         shape: list of ints
-        stddev: standard deviation of a truncated Gaussian
         wd: add L2Loss weight decay multiplied by this float. If None, weight
             decay is not added for this Variable.
+        dtype: data type of variable
         use_xavier: bool, whether to use xavier initializer
+        stddev: standard deviation of a truncated Gaussian
 
     Returns:
-        Variable Tensor
+        variable Tensor
     """
     if use_xavier:
         initializer = tf.contrib.layers.xavier_initializer()
     else:
         initializer = tf.truncated_normal_initializer(stddev=stddev)
-    var = _variable_on_cpu(name, shape, initializer)
+    var = _variable_on_cpu(name, shape, initializer, dtype=dtype)
     if wd is not None:
         weight_decay = tf.multiply(tf.nn.l2_loss(var), wd, name='weight_loss')
         tf.add_to_collection('losses', weight_decay)
@@ -85,10 +86,10 @@ def conv2d(inputs,
         num_in_channels = inputs.get_shape()[-1].value
         kernel_shape = [kernel_h, kernel_w, num_in_channels, num_output_channels]
         kernel = _variable_with_weight_decay('weights',
-                                           shape=kernel_shape,
-                                           use_xavier=use_xavier,
-                                           stddev=stddev,
-                                           wd=weight_decay)
+                                             shape=kernel_shape,
+                                             wd=weight_decay,
+                                             use_xavier=use_xavier,
+                                             stddev=stddev)
         stride_h, stride_w = stride
         outputs = tf.nn.conv2d(inputs, kernel, [1, stride_h, stride_w, 1], padding=padding)
         biases = _variable_on_cpu('biases', [num_output_channels], tf.constant_initializer(0.0))
@@ -125,12 +126,11 @@ def fully_connected(inputs,
         num_input_units = inputs.get_shape()[-1].value
         weights = _variable_with_weight_decay('weights',
                                               shape=[num_input_units, num_outputs],
+                                              wd=weight_decay,
                                               use_xavier=use_xavier,
-                                              stddev=stddev,
-                                              wd=weight_decay)
+                                              stddev=stddev)
         outputs = tf.matmul(inputs, weights)
-        biases = _variable_on_cpu('biases', [num_outputs],
-                                 tf.constant_initializer(0.0))
+        biases = _variable_on_cpu('biases', [num_outputs], tf.constant_initializer(0.0))
         outputs = tf.nn.bias_add(outputs, biases)
 
         if bn:
