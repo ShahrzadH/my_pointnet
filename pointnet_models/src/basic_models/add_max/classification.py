@@ -7,8 +7,10 @@ Created on Dec 4, 2018
 from src.utils.tf_utils import *
 import tensorflow as tf
 
-class BasicRegModel(object):
-    def __init__(self, is_training, batch_size, num_points, num_channels, model_size, lrn_rate=1e-3, bn_decay=None, optimizer='mom'):
+
+class Model(object):
+    def __init__(self, is_training, batch_size, num_points, num_channels, model_size, \
+                 lrn_rate=1e-3, bn_decay=None, optimizer='adam', wd_coef=1e-3):
         self._is_training = is_training
         self._bs = batch_size
         self._np = num_points
@@ -16,7 +18,8 @@ class BasicRegModel(object):
         self._ms = model_size
         self._lrn_rate = lrn_rate
         self._bn_decay = bn_decay
-        self._optimizer = 'mom'
+        self._optimizer = optimizer
+        self._wd_coef = wd_coef
         
         self.inputs = tf.placeholder(tf.float32, shape=[self._bs, self._np, self._nc], name='inputs')
         self.labels = tf.placeholder(tf.float32, shape=[self._bs, 1], name='labels')
@@ -32,7 +35,7 @@ class BasicRegModel(object):
         self.summaries = tf.summary.merge_all()
         
     def _build_model(self):
-        """ Regression PointNet, input is BxNxC, output Bx1 """
+        """ Basic Addition Classification Network, input is BxNxC, output Bx1 """
     
         inputs = tf.expand_dims(self.inputs, -1)
         
@@ -56,14 +59,19 @@ class BasicRegModel(object):
         net = conv2d(net, self._ms * 16, [1,1],
                      padding='VALID', stride=[1,1],
                      bn=True, is_training=self.training,
-                     scope='conv5', bn_decay=self._bn_decay)
+                     scope='conv5', bn_decay=self._bn_decay, activation_fn=None)
     
-        # Symmetric function: max pooling
-        net = max_pool2d(net, [self._np, 1],
-                         padding='VALID', scope='maxpool')
+        # Symmetric function: addition and maximum
+        v1 = tf.reduce_sum(net, 1)
+        v1 = tf.reshape(v1, [self._bs, -1])
+        
+        v2 = max_pool2d(net, [self._np, 1],
+                        padding='VALID', scope='maxpool')
+        v2 = tf.reshape(v2, [self._bs, -1])
+        
+        net = tf.concat([v1, v2], 1)
         
         # MLP on global point cloud vector
-        net = tf.reshape(net, [self._bs, -1])
         net = fully_connected(net, self._ms * 8, bn=True, is_training=self.training,
                               scope='fc1', bn_decay=self._bn_decay)
         net = fully_connected(net, self._ms * 4, bn=True, is_training=self.training,
@@ -75,8 +83,10 @@ class BasicRegModel(object):
         self.predictions = net  # Record prediction
         
         with tf.variable_scope('losses'):
-            loss = tf.losses.mean_squared_error(self.labels, self.predictions)
-            self.loss = tf.reduce_mean(loss, name='reg_loss')
+            cls_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=self.predictions, labels=self.labels))
+            wd_loss = tf.add_n(tf.get_collection('wd_losses')) 
+            
+            self.loss = cls_loss + self._wd_coef * wd_loss
             
             tf.summary.scalar('loss', self.loss)
         
@@ -87,10 +97,11 @@ class BasicRegModel(object):
             optimizer = tf.train.GradientDescentOptimizer(self._lrn_rate)
         elif self._optimizer == 'mom':
             optimizer = tf.train.MomentumOptimizer(self._lrn_rate, 0.9)
+        else: # Adam
+            optimizer = tf.train.AdamOptimizer(self._lrn_rate)
             
         grads, v = zip(*optimizer.compute_gradients(self.loss))
         apply_op = optimizer.apply_gradients(zip(grads, v), \
                                              global_step=self.global_step, name='train_step')
 
         self.train_op = apply_op
-

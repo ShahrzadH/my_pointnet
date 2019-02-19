@@ -39,13 +39,13 @@ def _variable_with_weight_decay(name, shape, wd, dtype=tf.float32, use_xavier=Tr
         variable Tensor
     """
     if use_xavier:
-        initializer = tf.contrib.layers.xavier_initializer()
+        initializer = tf.contrib.layers.xavier_initializer(dtype=dtype)
     else:
         initializer = tf.truncated_normal_initializer(stddev=stddev)
     var = _variable_on_cpu(name, shape, initializer, dtype=dtype)
     if wd is not None:
         weight_decay = tf.multiply(tf.nn.l2_loss(var), wd, name='weight_loss')
-        tf.add_to_collection('losses', weight_decay)
+        tf.add_to_collection('wd_losses', weight_decay)
     return var
 
 def conv2d(inputs,

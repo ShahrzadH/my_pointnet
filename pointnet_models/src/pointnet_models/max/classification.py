@@ -5,12 +5,12 @@ Created on Dec 4, 2018
 '''
 
 from src.utils.tf_utils import *
-from src.utils.transform_nets import *
+from src.transform_nets.max import *
 import tensorflow as tf
 
-class PointnetClsModel(object):
+class Model(object):
     def __init__(self, is_training, batch_size, num_points, num_channels, model_size, \
-                 lrn_rate=1e-3, bn_decay=None, optimizer='mom', reg_weight=0.001):
+                 lrn_rate=1e-3, bn_decay=None, optimizer='adam', wd_coef = 1e-3, reg_weight=0.001):
         self._is_training = is_training
         self._bs = batch_size
         self._np = num_points
@@ -18,7 +18,8 @@ class PointnetClsModel(object):
         self._ms = model_size
         self._lrn_rate = lrn_rate
         self._bn_decay = bn_decay
-        self._optimizer = 'mom'
+        self._optimizer = optimizer
+        self._wd_coef = wd_coef
         self._reg_weight = reg_weight
         
         self.inputs = tf.placeholder(tf.float32, shape=[self._bs, self._np, self._nc], name='inputs')
@@ -99,8 +100,12 @@ class PointnetClsModel(object):
             mat_diff -= tf.constant(np.eye(K), dtype=tf.float32)
             mat_diff_loss = tf.nn.l2_loss(mat_diff) 
             tf.summary.scalar('mat_loss', mat_diff_loss)
+            
+            # L2 weight decay
+            wd_loss = tf.add_n(tf.get_collection('wd_losses')) 
+            tf.summary.scalar('wd_loss', wd_loss)
         
-            self.loss = cls_loss + mat_diff_loss * self._reg_weight
+            self.loss = cls_loss + mat_diff_loss * self._reg_weight + wd_loss * self._wd_coef
             tf.summary.scalar('tot_loss', self.loss)
         
     def _build_train_op(self):
@@ -110,6 +115,8 @@ class PointnetClsModel(object):
             optimizer = tf.train.GradientDescentOptimizer(self._lrn_rate)
         elif self._optimizer == 'mom':
             optimizer = tf.train.MomentumOptimizer(self._lrn_rate, 0.9)
+        else: # Adam
+            optimizer = tf.train.AdamOptimizer(self._lrn_rate)
             
         grads, v = zip(*optimizer.compute_gradients(self.loss))
         apply_op = optimizer.apply_gradients(zip(grads, v), \

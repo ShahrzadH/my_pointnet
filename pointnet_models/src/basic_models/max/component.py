@@ -7,7 +7,7 @@ Created on Dec 4, 2018
 from src.utils.tf_utils import *
 import tensorflow as tf
 
-def get_basic_comp(point_cloud, is_training, scope, model_size=64, output_size=64, bn_decay=None):
+def func(point_cloud, is_training, scope, model_size=64, output_size=64, bn_decay=None):
     """ Regression PointNet component, input is BxNxC, output Bx(output_size) """
     batch_size = point_cloud.get_shape()[0].value
     num_point = point_cloud.get_shape()[1].value
